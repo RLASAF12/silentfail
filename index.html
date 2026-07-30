@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SilentFail — Agent Failure Series #14</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #080c0f;
+    --surface: #0d1117;
+    --surface2: #161b22;
+    --surface3: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #7d8590;
+    --green: #3fb950;
+    --green-dim: #1a3d2b;
+    --red: #f85149;
+    --red-dim: #3d1a1a;
+    --amber: #d29922;
+    --amber-dim: #3d2e0a;
+    --blue: #58a6ff;
+    --blue-dim: #0d2440;
+    --purple: #a371f7;
+    --mono: 'Menlo', 'Monaco', 'Cascadia Code', monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  /* ─── HEADER ─── */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .series-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .header-title {
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .confidence-pill {
+    background: var(--surface2);
+    border: 1px solid var(--green);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .confidence-pill.broken {
+    border-color: var(--red);
+    color: var(--red);
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .dot.pulse { animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+  /* ─── HERO ─── */
+  .hero {
+    padding: 48px 24px 32px;
+    text-align: center;
+    max-width: 780px;
+    margin: 0 auto;
+  }
+  .title {
+    font-size: 52px;
+    font-weight: 900;
+    letter-spacing: -2px;
+    background: linear-gradient(135deg, #f85149 0%, #d29922 50%, #e6edf3 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.1;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 10px;
+    letter-spacing: 0.5px;
+  }
+
+  /* ─── LAYOUT ─── */
+  .main {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 20px;
+    align-items: start;
+  }
+
+  /* ─── SCENARIO BAR ─── */
+  .scenario-bar {
+    grid-column: 1 / -1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+  }
+  .scenario-label { color: var(--muted); }
+  .scenario-name { color: var(--text); font-weight: 600; }
+  .scenario-sep { color: var(--border); }
+
+  /* ─── PIPELINE ─── */
+  .pipeline-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .panel-header {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    transition: all 0.35s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .step.pending { opacity: 0.4; }
+  .step.running { border-color: var(--blue); background: var(--blue-dim); opacity: 1; }
+  .step.complete { border-color: var(--green); opacity: 1; }
+  .step.compromised { border-color: var(--amber) !important; background: var(--amber-dim) !important; }
+  .step.failed-reveal { border-color: var(--red) !important; background: var(--red-dim) !important; animation: shake 0.4s ease; }
+  .step.the-lie { border-color: var(--amber) !important; background: #3d200a !important; }
+  .step.exploded { border-color: var(--red) !important; background: var(--red-dim) !important; }
+
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(2px); }
+  }
+
+  .step-row { display: flex; align-items: center; gap: 10px; }
+  .step-num {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: var(--muted);
+    flex-shrink: 0;
+  }
+  .step.running .step-num { border-color: var(--blue); color: var(--blue); }
+  .step.complete .step-num { background: var(--green); border-color: var(--green); color: #000; font-weight: 700; }
+  .step.compromised .step-num { background: var(--amber); border-color: var(--amber); color: #000; }
+  .step.failed-reveal .step-num, .step.exploded .step-num { background: var(--red); border-color: var(--red); color: #fff; }
+
+  .step-info { flex: 1; min-width: 0; }
+  .step-name { font-size: 13px; color: var(--text); font-weight: 600; }
+  .step-fn { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .step-status { font-size: 11px; margin-top: 4px; display: none; }
+  .step.running .step-status,
+  .step.complete .step-status,
+  .step.compromised .step-status,
+  .step.failed-reveal .step-status,
+  .step.the-lie .step-status,
+  .step.exploded .step-status { display: block; }
+
+  .status-ok { color: var(--green); }
+  .status-warn { color: var(--amber); }
+  .status-err { color: var(--red); }
+  .status-run { color: var(--blue); }
+  .step-icon { font-size: 16px; flex-shrink: 0; }
+
+  /* hidden tool response */
+  .tool-response {
+    display: none;
+    margin-top: 10px;
+    padding: 8px 10px;
+    background: #12060a;
+    border: 1px solid var(--red);
+    border-radius: 6px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .tool-response .key { color: var(--muted); }
+  .tool-response .val-err { color: var(--red); }
+  .tool-response .val-str { color: var(--amber); }
+  .tr-label { font-size: 10px; color: var(--red); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; font-weight: 700; }
+  .show-tr .tool-response { display: block; }
+
+  /* compromise chain */
+  .compromise-note {
+    display: none;
+    margin-top: 8px;
+    padding: 6px 8px;
+    background: #2a1a00;
+    border-left: 2px solid var(--amber);
+    font-size: 11px;
+    color: var(--amber);
+    border-radius: 0 4px 4px 0;
+  }
+  .show-chain .compromise-note { display: block; }
+
+  /* ─── SIDE PANEL ─── */
+  .side-panel { display: flex; flex-direction: column; gap: 12px; }
+
+  .info-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .card-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  /* ─── CONFIDENCE METER ─── */
+  .conf-bar-wrap {
+    height: 6px; background: var(--surface3);
+    border-radius: 3px; overflow: hidden; margin: 8px 0;
+  }
+  .conf-bar {
+    height: 100%; border-radius: 3px;
+    background: var(--green);
+    transition: width 0.6s ease, background 0.4s;
+    width: 0%;
+  }
+  .conf-bar.broken { background: var(--red); }
+  .conf-value {
+    font-size: 28px; font-weight: 900; color: var(--green);
+    text-align: center; transition: color 0.4s;
+  }
+  .conf-value.broken { color: var(--red); }
+  .conf-label { font-size: 11px; color: var(--muted); text-align: center; margin-top: 4px; }
+
+  /* ─── AGENT LOG ─── */
+  .log-box {
+    background: #050709;
+    border-radius: 6px;
+    padding: 10px;
+    height: 200px;
+    overflow-y: auto;
+    font-size: 11px;
+    line-height: 1.8;
+  }
+  .log-box::-webkit-scrollbar { width: 4px; }
+  .log-box::-webkit-scrollbar-track { background: transparent; }
+  .log-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .log-entry { display: flex; gap: 8px; }
+  .log-time { color: var(--muted); flex-shrink: 0; }
+  .log-msg { color: var(--text); }
+  .log-msg.err { color: var(--red); }
+  .log-msg.warn { color: var(--amber); }
+  .log-msg.ok { color: var(--green); }
+  .log-msg.fatal { color: var(--red); font-weight: 700; }
+  .log-msg.hidden-err { color: var(--red); display: none; }
+  .show-hidden .log-msg.hidden-err { display: flex; }
+  .show-hidden .log-msg.fabricated { text-decoration: line-through; opacity: 0.4; }
+
+  /* ─── CONTROLS ─── */
+  .controls { display: flex; flex-direction: column; gap: 8px; }
+
+  .btn {
+    width: 100%; padding: 11px 16px;
+    border-radius: 7px; border: 1px solid;
+    font-family: var(--mono); font-size: 12px;
+    cursor: pointer; transition: all 0.2s;
+    font-weight: 600; letter-spacing: 0.3px;
+    text-align: center;
+  }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-primary { background: var(--blue-dim); border-color: var(--blue); color: var(--blue); }
+  .btn-primary:hover:not(:disabled) { background: #1a3a5c; }
+  .btn-danger { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+  .btn-danger:hover:not(:disabled) { background: #5c1a1a; }
+  .btn-warn { background: var(--amber-dim); border-color: var(--amber); color: var(--amber); }
+  .btn-warn:hover:not(:disabled) { background: #4a2e00; }
+  .btn-fix { background: #0f2d1a; border-color: var(--green); color: var(--green); }
+  .btn-fix:hover:not(:disabled) { background: #1a4a2a; }
+  .btn-ghost { background: transparent; border-color: var(--border); color: var(--muted); }
+  .btn-ghost:hover:not(:disabled) { border-color: var(--muted); color: var(--text); }
+
+  .toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+    font-size: 11px;
+  }
+  .toggle-label { color: var(--muted); }
+  .toggle {
+    width: 32px; height: 18px;
+    background: var(--surface3); border: 1px solid var(--border);
+    border-radius: 9px; cursor: pointer; position: relative; transition: 0.2s;
+  }
+  .toggle::after {
+    content: ''; position: absolute;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--muted); top: 2px; left: 2px;
+    transition: 0.2s;
+  }
+  .toggle.on { background: var(--red-dim); border-color: var(--red); }
+  .toggle.on::after { background: var(--red); left: 16px; }
+
+  /* ─── FIX PANEL ─── */
+  .fix-panel {
+    display: none;
+    margin-top: 8px;
+    background: #050e0a;
+    border: 1px solid var(--green);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .fix-panel.visible { display: block; }
+  .fix-title { color: var(--green); font-size: 12px; font-weight: 700; margin-bottom: 10px; }
+  .fix-code {
+    background: #0a0a0a; border-radius: 5px;
+    padding: 10px 12px; font-size: 11px;
+    line-height: 1.8; color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .code-cmt { color: #4a5568; }
+  .code-kw { color: #79b8ff; }
+  .code-fn { color: #b392f0; }
+  .code-str { color: #9ecbff; }
+  .code-err { color: var(--red); }
+
+  /* ─── EXPLODE OVERLAY ─── */
+  .explosion {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(248,81,73,0.12);
+    z-index: 200;
+    backdrop-filter: blur(2px);
+    align-items: center; justify-content: center;
+    flex-direction: column; gap: 20px; text-align: center;
+    padding: 32px;
+  }
+  .explosion.show { display: flex; animation: flashIn 0.3s ease; }
+  @keyframes flashIn { from { opacity:0; background: rgba(248,81,73,0.4); } to { opacity:1; } }
+  .expl-title { font-size: 48px; font-weight: 900; color: var(--red); letter-spacing: -2px; }
+  .expl-sub { font-size: 14px; color: var(--text); max-width: 500px; line-height: 1.6; }
+  .expl-detail {
+    background: var(--surface); border: 1px solid var(--red);
+    border-radius: 8px; padding: 16px 24px; max-width: 520px;
+    text-align: left; font-size: 12px; line-height: 1.9;
+  }
+  .expl-row { display: flex; gap: 12px; }
+  .expl-k { color: var(--muted); min-width: 120px; }
+  .expl-v { color: var(--red); font-weight: 600; }
+  .expl-note { font-size: 12px; color: var(--amber); margin-top: 4px; }
+  .expl-dismiss {
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--muted); padding: 8px 24px; border-radius: 6px;
+    font-family: var(--mono); font-size: 12px; cursor: pointer;
+    margin-top: 8px;
+  }
+  .expl-dismiss:hover { border-color: var(--text); color: var(--text); }
+
+  /* ─── FOOTER ─── */
+  .footer {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+    display: flex; gap: 24px;
+    font-size: 11px; color: var(--muted);
+    flex-wrap: wrap;
+  }
+  .footer-link { color: var(--muted); text-decoration: none; }
+  .footer-link:hover { color: var(--text); }
+  .footer-sep { color: var(--border); }
+
+  /* ─── SPINNER ─── */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    display: inline-block; width: 10px; height: 10px;
+    border: 2px solid transparent; border-top-color: var(--blue);
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+  }
+
+  /* ─── STATS ─── */
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat-box {
+    background: var(--surface2); border-radius: 6px;
+    padding: 10px; text-align: center;
+  }
+  .stat-val { font-size: 20px; font-weight: 900; color: var(--text); }
+  .stat-val.red { color: var(--red); }
+  .stat-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div>
+    <div class="series-badge">▸ Agent Failure Series · #14</div>
+    <div class="header-title" style="margin-top:2px">SilentFail</div>
+  </div>
+  <div class="header-right">
+    <div class="confidence-pill" id="confPill">
+      <div class="dot pulse"></div>
+      <span id="pillText">Agent confidence: 98%</span>
+    </div>
+  </div>
+</div>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="title">SilentFail</div>
+  <div class="subtitle">
+    Tool returned an error. Agent logged "success". 9 steps built on a lie.<br>
+    The pipeline didn't fail — it <em>never existed</em>.
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- SCENARIO BAR -->
+  <div class="scenario-bar">
+    <span class="scenario-label">Scenario:</span>
+    <span class="scenario-name">Production deployment pipeline — microservice v2.4.1</span>
+    <span class="scenario-sep">·</span>
+    <span class="scenario-label">Agent:</span>
+    <span class="scenario-name">deploy-agent@cluster-prod</span>
+    <span class="scenario-sep">·</span>
+    <span class="scenario-label" id="phaseLabel">Phase: Awaiting run</span>
+  </div>
+
+  <!-- LEFT: PIPELINE STEPS -->
+  <div class="pipeline-panel">
+    <div class="panel-header">Pipeline steps</div>
+
+    <!-- STEP 1 -->
+    <div class="step pending" id="step1">
+      <div class="step-row">
+        <div class="step-num">1</div>
+        <div class="step-info">
+          <div class="step-name">Read deployment manifest</div>
+          <div class="step-fn">read_manifest("v2.4.1")</div>
+          <div class="step-status status-ok" id="s1status"></div>
+        </div>
+        <div class="step-icon" id="s1icon">⬜</div>
+      </div>
+    </div>
+
+    <!-- STEP 2 — THE LIE -->
+    <div class="step pending" id="step2">
+      <div class="step-row">
+        <div class="step-num">2</div>
+        <div class="step-info">
+          <div class="step-name">Write environment config</div>
+          <div class="step-fn">write_env_config("/etc/service/v2.4.1.env")</div>
+          <div class="step-status" id="s2status"></div>
+        </div>
+        <div class="step-icon" id="s2icon">⬜</div>
+      </div>
+      <!-- WHAT THE TOOL ACTUALLY RETURNED -->
+      <div class="tool-response" id="s2response">
+        <div class="tr-label">⚠ Actual tool response (agent ignored this)</div>
+        <div class="key">status: <span class="val-err">500</span></div>
+        <div class="key">error: <span class="val-err">"DISK_QUOTA_EXCEEDED"</span></div>
+        <div class="key">message: <span class="val-str">"Write failed — /etc/service/ partition at 100%"</span></div>
+        <div class="key">bytes_written: <span class="val-err">0</span></div>
+        <div class="key">file_created: <span class="val-err">false</span></div>
+      </div>
+      <div class="compromise-note" id="s2chain">
+        ⚠ No config file exists on disk. Every downstream step assumes it does.
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="step pending" id="step3">
+      <div class="step-row">
+        <div class="step-num">3</div>
+        <div class="step-info">
+          <div class="step-name">Build container image</div>
+          <div class="step-fn">docker_build("Dockerfile", tag="v2.4.1")</div>
+          <div class="step-status status-ok" id="s3status"></div>
+        </div>
+        <div class="step-icon" id="s3icon">⬜</div>
+      </div>
+      <div class="compromise-note">⚠ Build injects env at runtime — no config = stale cached env baked in silently</div>
+    </div>
+
+    <!-- STEP 4 -->
+    <div class="step pending" id="step4">
+      <div class="step-row">
+        <div class="step-num">4</div>
+        <div class="step-info">
+          <div class="step-name">Run integration tests</div>
+          <div class="step-fn">run_tests("integration", env="staging")</div>
+          <div class="step-status status-ok" id="s4status"></div>
+        </div>
+        <div class="step-icon" id="s4icon">⬜</div>
+      </div>
+      <div class="compromise-note">⚠ Tests hit staging DB with old credentials — pass on cached responses, never touch new config</div>
+    </div>
+
+    <!-- STEP 5 -->
+    <div class="step pending" id="step5">
+      <div class="step-row">
+        <div class="step-num">5</div>
+        <div class="step-info">
+          <div class="step-name">Push image to registry</div>
+          <div class="step-fn">registry_push("ghcr.io/service:v2.4.1")</div>
+          <div class="step-status status-ok" id="s5status"></div>
+        </div>
+        <div class="step-icon" id="s5icon">⬜</div>
+      </div>
+      <div class="compromise-note">⚠ Image is built — with old embedded config. Push succeeds, but artifact is wrong.</div>
+    </div>
+
+    <!-- STEP 6 -->
+    <div class="step pending" id="step6">
+      <div class="step-row">
+        <div class="step-num">6</div>
+        <div class="step-info">
+          <div class="step-name">Deploy to staging</div>
+          <div class="step-fn">k8s_rollout("staging/service", image="v2.4.1")</div>
+          <div class="step-status status-ok" id="s6status"></div>
+        </div>
+        <div class="step-icon" id="s6icon">⬜</div>
+      </div>
+      <div class="compromise-note">⚠ Staging reads its own env — appears healthy. Problem invisible in this environment.</div>
+    </div>
+
+    <!-- STEP 7 -->
+    <div class="step pending" id="step7">
+      <div class="step-row">
+        <div class="step-num">7</div>
+        <div class="step-info">
+          <div class="step-name">Smoke test staging</div>
+          <div class="step-fn">smoke_test("https://staging.internal/health")</div>
+          <div class="step-status status-ok" id="s7status"></div>
+        </div>
+        <div class="step-icon" id="s7icon">⬜</div>
+      </div>
+      <div class="compromise-note">⚠ Health check passes — staging env was not affected. Nothing here tests the config write.</div>
+    </div>
+
+    <!-- STEP 8 -->
+    <div class="step pending" id="step8">
+      <div class="step-row">
+        <div class="step-num">8</div>
+        <div class="step-info">
+          <div class="step-name">Gate approval — auto-approved</div>
+          <div class="step-fn">approval_gate("staging-passed", auto=True)</div>
+          <div class="step-status status-ok" id="s8status"></div>
+        </div>
+        <div class="step-icon" id="s8icon">⬜</div>
+      </div>
+      <div class="compromise-note">⚠ Auto-approval based on staging results. Staging never tested the broken config path.</div>
+    </div>
+
+    <!-- STEP 9 -->
+    <div class="step pending" id="step9">
+      <div class="step-row">
+        <div class="step-num">9</div>
+        <div class="step-info">
+          <div class="step-name">Notify team — deploying to prod</div>
+          <div class="step-fn">slack_notify("#deployments", "v2.4.1 → PROD ✅")</div>
+          <div class="step-status status-ok" id="s9status"></div>
+        </div>
+        <div class="step-icon" id="s9icon">⬜</div>
+      </div>
+      <div class="compromise-note">⚠ Team told deployment is clean. No one checks the config write from step 2.</div>
+    </div>
+
+    <!-- STEP 10 — EXPLODE -->
+    <div class="step pending" id="step10">
+      <div class="step-row">
+        <div class="step-num">10</div>
+        <div class="step-info">
+          <div class="step-name">Deploy to production</div>
+          <div class="step-fn">k8s_rollout("prod/service", image="v2.4.1")</div>
+          <div class="step-status" id="s10status"></div>
+        </div>
+        <div class="step-icon" id="s10icon">⬜</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT: SIDE PANEL -->
+  <div class="side-panel">
+
+    <!-- CONFIDENCE -->
+    <div class="info-card">
+      <div class="card-title">Agent confidence</div>
+      <div class="conf-value" id="confValue">—</div>
+      <div class="conf-bar-wrap"><div class="conf-bar" id="confBar"></div></div>
+      <div class="conf-label" id="confNote">Waiting for deployment run</div>
+    </div>
+
+    <!-- STATS -->
+    <div class="info-card">
+      <div class="card-title">Deployment stats</div>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-val" id="statSteps">0/10</div>
+          <div class="stat-lbl">Steps complete</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="statErrors">0</div>
+          <div class="stat-lbl">Errors logged</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="statReal" style="color:var(--red)">0</div>
+          <div class="stat-lbl">Real errors</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="statComp">0</div>
+          <div class="stat-lbl">Compromised steps</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="info-card">
+      <div class="card-title">Controls</div>
+      <div class="controls">
+        <button class="btn btn-primary" id="btnRun" onclick="startRun()">▶ Run deployment pipeline</button>
+        <button class="btn btn-danger" id="btnExplode" onclick="triggerExplosion()" disabled>💥 Deploy to production (step 10)</button>
+        <div class="toggle-row">
+          <span class="toggle-label">Show hidden tool responses</span>
+          <div class="toggle" id="toggleTR" onclick="toggleToolResponses()"></div>
+        </div>
+        <div class="toggle-row" style="border:none">
+          <span class="toggle-label">Show compromise chain</span>
+          <div class="toggle" id="toggleChain" onclick="toggleCompromiseChain()"></div>
+        </div>
+        <button class="btn btn-warn" id="btnReveal" onclick="revealChain()" disabled>🔍 REVEAL FAILURE CHAIN</button>
+        <button class="btn btn-fix" id="btnFix" onclick="showFix()" disabled>✓ Show the 3-line fix</button>
+        <button class="btn btn-ghost" onclick="resetAll()">↺ Reset simulation</button>
+      </div>
+    </div>
+
+    <!-- FIX PANEL -->
+    <div class="fix-panel" id="fixPanel">
+      <div class="fix-title">✓ The fix — 3 lines every agent needs</div>
+      <div class="fix-code">
+<span class="code-cmt"># Agent's current error handling:</span>
+<span class="code-cmt"># result = write_env_config(path)</span>
+<span class="code-cmt"># → Agent reads result.message, ignores result.error</span>
+
+<span class="code-cmt"># The fix: treat tool responses as untrusted</span>
+<span class="code-kw">result</span> = <span class="code-fn">write_env_config</span>(path)
+<span class="code-kw">if</span> result.get(<span class="code-str">"error"</span>) <span class="code-kw">or</span> <span class="code-kw">not</span> result.get(<span class="code-str">"file_created"</span>):
+    <span class="code-err">raise</span> ToolFailure(f<span class="code-str">"Step 2 failed: {result['error']}"</span>)
+
+<span class="code-cmt"># One assertion gate stops 9 compromised steps.</span>
+      </div>
+      <div style="margin-top:10px; font-size:11px; color:var(--muted); line-height:1.6">
+        Tool calls return data structures. The agent must validate the <em>schema</em>, not just receive the value. An error buried in a field you don't check is an error you don't know about.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- AGENT LOG (full width) -->
+  <div style="grid-column: 1 / -1;">
+    <div class="info-card">
+      <div class="card-title">Agent execution log</div>
+      <div class="log-box" id="logBox">
+        <div class="log-entry"><span class="log-time">--:--:--</span><span class="log-msg" style="color:var(--muted)">Waiting for deployment run...</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <span>Agent Failure Series #14 — SilentFail</span>
+    <span class="footer-sep">·</span>
+    <span>Pain signals: <a class="footer-link" href="https://dev.to/plasma_01/my-agent-said-done-after-one-tool-call-failed-silently-1oj7" target="_blank">DEV.to Jul 13</a> · <a class="footer-link" href="https://github.com/huggingface/smolagents/issues/2166" target="_blank">smolagents #2166</a> · <a class="footer-link" href="https://fuzn.com.au/tool-call-reliability-in-production-llm-agents/" target="_blank">FUZN Jul 20</a></span>
+    <span class="footer-sep">·</span>
+    <a class="footer-link" href="https://rlasaf12.github.io/contextdrift/" target="_blank">← #13 ContextDrift</a>
+  </div>
+
+</div>
+
+<!-- EXPLOSION OVERLAY -->
+<div class="explosion" id="explosionOverlay">
+  <div class="expl-title">💀 PRODUCTION DOWN</div>
+  <div class="expl-sub">
+    9 steps completed. 0 succeeded.<br>The config written in step 2 never existed.
+  </div>
+  <div class="expl-detail">
+    <div class="expl-row"><span class="expl-k">Error:</span><span class="expl-v">DB_CONNECTION_REFUSED</span></div>
+    <div class="expl-row"><span class="expl-k">Root cause:</span><span class="expl-v">Missing /etc/service/v2.4.1.env</span></div>
+    <div class="expl-row"><span class="expl-k">Written at step:</span><span class="expl-v">Never. Step 2 failed silently.</span></div>
+    <div class="expl-row"><span class="expl-k">Agent logged:</span><span class="expl-v">"Config written. Proceeding..."</span></div>
+    <div class="expl-row"><span class="expl-k">Steps compromised:</span><span class="expl-v">3, 4, 5, 6, 7, 8, 9, 10</span></div>
+    <div class="expl-row"><span class="expl-k">Agent confidence at failure:</span><span class="expl-v">98%</span></div>
+    <div style="margin-top:10px; border-top:1px solid #3d1a1a; padding-top:8px;">
+      <div class="expl-note">The agent received {error: "DISK_QUOTA_EXCEEDED", file_created: false}</div>
+      <div class="expl-note">It checked result.message. It did not check result.error.</div>
+      <div class="expl-note">It logged: "Environment config written successfully."</div>
+    </div>
+  </div>
+  <button class="expl-dismiss" onclick="dismissExplosion()">Dismiss → see failure chain</button>
+</div>
+
+<script>
+  // ─── STATE ───
+  let running = false;
+  let phase = 'idle'; // idle | running | paused | revealed | fixed
+  let showTR = false;
+  let showChain = false;
+  let stepsDone = 0;
+  let exploded = false;
+
+  const STEPS = [
+    { id: 'step1', name: 'Read manifest', fn: 'read_manifest', duration: 800,
+      log: [
+        { msg: 'Calling read_manifest("v2.4.1")...', cls: '' },
+        { msg: '✓ Manifest loaded — 12 services, target: production', cls: 'ok' },
+      ],
+      completeMsg: 'Manifest loaded, 12 services found.', icon: '✓' },
+
+    { id: 'step2', name: 'Write env config', fn: 'write_env_config', duration: 700,
+      isSilentFail: true,
+      log: [
+        { msg: 'Calling write_env_config("/etc/service/v2.4.1.env")...', cls: '' },
+        { msg: '[HIDDEN] Tool response: {status:500, error:"DISK_QUOTA_EXCEEDED", file_created:false}', cls: 'hidden-err' },
+        { msg: '✓ Environment config written successfully.', cls: 'ok fabricated' },
+      ],
+      completeMsg: 'Environment config written. Proceeding to build.', icon: '✓' },
+
+    { id: 'step3', name: 'Build image', fn: 'docker_build', duration: 1400,
+      isCompromised: true,
+      log: [
+        { msg: 'Calling docker_build("Dockerfile", tag="v2.4.1")...', cls: '' },
+        { msg: '✓ Image built: ghcr.io/service:v2.4.1 (342MB)', cls: 'ok' },
+      ],
+      completeMsg: 'Image built successfully.', icon: '✓' },
+
+    { id: 'step4', name: 'Run tests', fn: 'run_tests', duration: 1200,
+      isCompromised: true,
+      log: [
+        { msg: 'Calling run_tests("integration", env="staging")...', cls: '' },
+        { msg: '✓ 247 tests passed, 0 failed', cls: 'ok' },
+      ],
+      completeMsg: '247 integration tests passed.', icon: '✓' },
+
+    { id: 'step5', name: 'Push to registry', fn: 'registry_push', duration: 900,
+      isCompromised: true,
+      log: [
+        { msg: 'Calling registry_push("ghcr.io/service:v2.4.1")...', cls: '' },
+        { msg: '✓ Image pushed: digest sha256:a8f3...', cls: 'ok' },
+      ],
+      completeMsg: 'Image pushed to registry.', icon: '✓' },
+
+    { id: 'step6', name: 'Deploy staging', fn: 'k8s_rollout', duration: 1100,
+      isCompromised: true,
+      log: [
+        { msg: 'Calling k8s_rollout("staging/service", image="v2.4.1")...', cls: '' },
+        { msg: '✓ Staging rollout complete — 3/3 pods running', cls: 'ok' },
+      ],
+      completeMsg: 'Staged v2.4.1 — 3/3 pods running.', icon: '✓' },
+
+    { id: 'step7', name: 'Smoke test staging', fn: 'smoke_test', duration: 700,
+      isCompromised: true,
+      log: [
+        { msg: 'Calling smoke_test("https://staging.internal/health")...', cls: '' },
+        { msg: '✓ Health: 200 OK · latency 34ms · all checks pass', cls: 'ok' },
+      ],
+      completeMsg: 'Smoke tests passed.', icon: '✓' },
+
+    { id: 'step8', name: 'Gate approval', fn: 'approval_gate', duration: 500,
+      isCompromised: true,
+      log: [
+        { msg: 'Calling approval_gate("staging-passed", auto=True)...', cls: '' },
+        { msg: '✓ Auto-approved — staging gates green', cls: 'ok' },
+      ],
+      completeMsg: 'Approval gate passed (auto).', icon: '✓' },
+
+    { id: 'step9', name: 'Notify team', fn: 'slack_notify', duration: 500,
+      isCompromised: true,
+      log: [
+        { msg: 'Calling slack_notify("#deployments", "v2.4.1 → PROD ✅")...', cls: '' },
+        { msg: '✓ Slack message sent — team notified', cls: 'ok' },
+      ],
+      completeMsg: 'Team notified: v2.4.1 deploying to PROD ✅', icon: '✓' },
+  ];
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  function addLog(msg, cls='') {
+    const box = document.getElementById('logBox');
+    const now = new Date();
+    const ts = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    entry.innerHTML = `<span class="log-time">${ts}</span><span class="log-msg ${cls}">${msg}</span>`;
+    box.appendChild(entry);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function clearLog() {
+    document.getElementById('logBox').innerHTML = '';
+  }
+
+  function setConfidence(val, broken=false) {
+    const cv = document.getElementById('confValue');
+    const cb = document.getElementById('confBar');
+    const pill = document.getElementById('confPill');
+    const pillText = document.getElementById('pillText');
+    const note = document.getElementById('confNote');
+    cv.textContent = broken ? '—' : val + '%';
+    cb.style.width = broken ? '100%' : val + '%';
+    cv.className = 'conf-value' + (broken ? ' broken' : '');
+    cb.className = 'conf-bar' + (broken ? ' broken' : '');
+    pill.className = 'confidence-pill' + (broken ? ' broken' : '');
+    pillText.textContent = broken ? 'Pipeline failed' : `Agent confidence: ${val}%`;
+    if(broken) note.textContent = 'Failure traced to step 2';
+  }
+
+  function setPhase(txt) {
+    document.getElementById('phaseLabel').textContent = 'Phase: ' + txt;
+  }
+
+  function updateStats(done, loggedErr, realErr, comp) {
+    document.getElementById('statSteps').textContent = done + '/10';
+    document.getElementById('statErrors').textContent = loggedErr;
+    document.getElementById('statReal').textContent = realErr;
+    document.getElementById('statComp').textContent = comp;
+  }
+
+  async function startRun() {
+    if (running) return;
+    running = true;
+    exploded = false;
+    clearLog();
+    setPhase('Running');
+    document.getElementById('btnRun').disabled = true;
+    document.getElementById('btnExplode').disabled = true;
+    document.getElementById('btnReveal').disabled = true;
+    document.getElementById('btnFix').disabled = true;
+
+    // Reset all steps
+    document.querySelectorAll('.step').forEach(s => {
+      s.className = 'step pending';
+    });
+    setConfidence(0);
+    updateStats(0, 0, 1, 0);
+
+    addLog('═══ Starting deployment: v2.4.1 → production ═══', '');
+    addLog('Agent initialized · tool calls: enabled · error_gates: DISABLED', 'warn');
+    await sleep(400);
+
+    for (let i = 0; i < STEPS.length; i++) {
+      const s = STEPS[i];
+      const el = document.getElementById(s.id);
+      const icon = document.getElementById(s.id.replace('step','s') + 'icon');
+      const status = document.getElementById(s.id.replace('step','s') + 'status');
+
+      // Running
+      el.className = 'step running';
+      icon.textContent = '⚙';
+      status.innerHTML = `<span class="status-run"><span class="spinner"></span> Running ${s.fn}...</span>`;
+      status.style.display = 'block';
+      addLog(`→ ${s.fn}()...`, '');
+
+      await sleep(s.duration);
+
+      // Add step logs
+      for (const l of s.log) {
+        addLog(l.msg, l.cls);
+        await sleep(120);
+      }
+
+      // Complete
+      stepsDone = i + 1;
+      if (s.isSilentFail) {
+        el.className = 'step complete the-lie';
+        icon.textContent = '✓';
+        status.innerHTML = `<span class="status-ok">✓ ${s.completeMsg}</span>`;
+        setConfidence(97);
+        updateStats(stepsDone, 0, 1, 0);
+      } else if (s.isCompromised) {
+        el.className = 'step complete';
+        icon.textContent = '✓';
+        status.innerHTML = `<span class="status-ok">✓ ${s.completeMsg}</span>`;
+        const confVal = 94 + Math.floor(Math.random() * 5);
+        setConfidence(confVal);
+        updateStats(stepsDone, 0, 1, i - 1);
+      } else {
+        el.className = 'step complete';
+        icon.textContent = '✓';
+        status.innerHTML = `<span class="status-ok">✓ ${s.completeMsg}</span>`;
+        setConfidence(98);
+        updateStats(stepsDone, 0, 0, 0);
+      }
+
+      if (i < STEPS.length - 1) await sleep(300);
+    }
+
+    // All 9 done
+    addLog('━━━ Steps 1–9 complete. Agent confidence: 98%. Deploying to production... ━━━', 'warn');
+    setPhase('Awaiting production deploy');
+    document.getElementById('step10').className = 'step running';
+    document.getElementById('s10icon').textContent = '⚙';
+    document.getElementById('s10status').innerHTML = '<span class="status-run"><span class="spinner"></span> Awaiting confirmation...</span>';
+    document.getElementById('s10status').style.display = 'block';
+
+    document.getElementById('btnExplode').disabled = false;
+    running = false;
+  }
+
+  function triggerExplosion() {
+    if (exploded) return;
+    exploded = true;
+
+    const el10 = document.getElementById('step10');
+    const icon10 = document.getElementById('s10icon');
+    const status10 = document.getElementById('s10status');
+
+    addLog('→ k8s_rollout("prod/service", image="v2.4.1")...', '');
+
+    setTimeout(() => {
+      addLog('[FATAL] Pod crash loop — CrashLoopBackOff x12', 'fatal');
+      addLog('[FATAL] DB_CONNECTION_REFUSED — missing credentials', 'fatal');
+      addLog('[FATAL] /etc/service/v2.4.1.env: No such file or directory', 'fatal');
+      addLog('[FATAL] Production rollout FAILED — rolling back...', 'fatal');
+      addLog('━━━ ROOT CAUSE: write_env_config() returned {error:"DISK_QUOTA_EXCEEDED", file_created:false}', 'err');
+      addLog('━━━ Agent received the error. Agent did not check result.error.', 'err');
+      addLog('━━━ Agent logged: "Environment config written successfully."', 'err');
+
+      el10.className = 'step exploded';
+      icon10.textContent = '✗';
+      status10.innerHTML = '<span class="status-err">✗ PROD_DOWN — DB_CONNECTION_REFUSED</span>';
+
+      setConfidence(0, true);
+      setPhase('PRODUCTION DOWN');
+      updateStats(10, 0, 1, 8);
+      document.getElementById('btnExplode').disabled = true;
+
+      document.getElementById('explosionOverlay').classList.add('show');
+    }, 1200);
+  }
+
+  function dismissExplosion() {
+    document.getElementById('explosionOverlay').classList.remove('show');
+    document.getElementById('btnReveal').disabled = false;
+    document.getElementById('btnFix').disabled = false;
+  }
+
+  function revealChain() {
+    // Mark step2 as the-lie, all compromised steps
+    document.getElementById('step2').className = 'step failed-reveal show-tr show-chain';
+    document.getElementById('s2status').innerHTML = '<span class="status-err">✗ ACTUALLY FAILED — {error:"DISK_QUOTA_EXCEEDED", file_created:false}</span>';
+    document.getElementById('s2icon').textContent = '✗';
+
+    const compromisedSteps = ['step3','step4','step5','step6','step7','step8','step9'];
+    compromisedSteps.forEach(sid => {
+      const el = document.getElementById(sid);
+      el.className = el.className.replace('complete','compromised') + ' show-chain';
+    });
+
+    if (showChain) {
+      document.querySelectorAll('.compromise-note').forEach(n => n.style.display = 'block');
+    }
+
+    addLog('', '');
+    addLog('══ FAILURE CHAIN REVEALED ══', 'err');
+    addLog('Step 2: DISK_QUOTA_EXCEEDED → file_created: false', 'err');
+    addLog('Steps 3–9: Built on a config file that does not exist', 'err');
+    addLog('Step 10: Production deployment. Config missing. Services cannot start.', 'fatal');
+
+    setPhase('Failure chain revealed');
+    document.getElementById('btnReveal').disabled = true;
+  }
+
+  function showFix() {
+    document.getElementById('fixPanel').classList.add('visible');
+    addLog('', '');
+    addLog('── FIX: validate tool response schema, not just .message ──', 'ok');
+    addLog('if result.get("error") or not result.get("file_created"):', 'ok');
+    addLog('    raise ToolFailure("Step 2 failed: " + result["error"])', 'ok');
+    addLog('One assertion gate. Stops all 9 downstream steps from running.', 'ok');
+    document.getElementById('btnFix').disabled = true;
+    setPhase('Fix applied');
+  }
+
+  function toggleToolResponses() {
+    showTR = !showTR;
+    document.getElementById('toggleTR').className = 'toggle' + (showTR ? ' on' : '');
+    document.querySelectorAll('.step').forEach(s => {
+      if (showTR) s.classList.add('show-tr');
+      else s.classList.remove('show-tr');
+    });
+    // Also toggle hidden log entries
+    document.getElementById('logBox').className = 'log-box' + (showTR ? ' show-hidden' : '');
+  }
+
+  function toggleCompromiseChain() {
+    showChain = !showChain;
+    document.getElementById('toggleChain').className = 'toggle' + (showChain ? ' on' : '');
+    document.querySelectorAll('.step').forEach(s => {
+      if (showChain) s.classList.add('show-chain');
+      else s.classList.remove('show-chain');
+    });
+  }
+
+  function resetAll() {
+    running = false; exploded = false; stepsDone = 0;
+    document.querySelectorAll('.step').forEach(s => {
+      s.className = 'step pending';
+      s.classList.remove('show-tr','show-chain');
+    });
+    document.querySelectorAll('.step-status').forEach(s => s.style.display = 'none');
+    document.querySelectorAll('.step-icon').forEach(i => i.textContent = '⬜');
+    document.getElementById('explosionOverlay').classList.remove('show');
+    document.getElementById('fixPanel').classList.remove('visible');
+    document.getElementById('confValue').textContent = '—';
+    document.getElementById('confBar').style.width = '0%';
+    document.getElementById('confBar').className = 'conf-bar';
+    document.getElementById('confValue').className = 'conf-value';
+    document.getElementById('confPill').className = 'confidence-pill';
+    document.getElementById('pillText').textContent = 'Agent confidence: —';
+    document.getElementById('confNote').textContent = 'Waiting for deployment run';
+    updateStats(0,0,0,0);
+    setPhase('Awaiting run');
+    clearLog();
+    addLog('Waiting for deployment run...', '');
+    document.getElementById('btnRun').disabled = false;
+    document.getElementById('btnExplode').disabled = true;
+    document.getElementById('btnReveal').disabled = true;
+    document.getElementById('btnFix').disabled = true;
+    showTR = false; showChain = false;
+    document.getElementById('toggleTR').className = 'toggle';
+    document.getElementById('toggleChain').className = 'toggle';
+    document.getElementById('logBox').className = 'log-box';
+  }
+</script>
+</body>
+</html>
