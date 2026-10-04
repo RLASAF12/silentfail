@@ -1,3 +1,5 @@
+> **Archived.** This repo moved to [RLASAF12/agent-failure-lab](https://github.com/RLASAF12/agent-failure-lab/tree/main/silentfail) (folder `silentfail/`, full history preserved). Archived 2026-10-04.
+
 # SilentFail — Agent Failure Series #14
 
 > Tool returns an error. Agent logs success. 9 steps built on a lie.
